@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run serve:*)",
+      "Bash(set NODE_OPTIONS=--openssl-legacy-provider)",
+      "Bash(node --version:*)",
+      "Bash(npm --version:*)",
+      "Bash(npm install:*)",
+      "Bash(nvm --version:*)",
+      "Bash(export NODE_OPTIONS=--openssl-legacy-provider:*)",
+      "Bash(for file in *.vue)",
+      "Bash(do sed -i 's/<script>\\\\nexport default {\\\\n}\\\\n<\\\\/script>/<script setup>\\\\n<\\\\/script>/g' \"$file\")",
+      "Bash(done)",
+      "Bash(ls:*)",
+      "Bash(npm run build:*)",
+      "Bash(tree:*)"
+    ]
+  }
+}
