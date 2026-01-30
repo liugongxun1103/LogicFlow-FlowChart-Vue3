@@ -46,6 +46,43 @@
     >
       <step-foward size="18" />
     </div>
+    <el-dropdown @command="handleExport">
+      <div class="toolbar-item">
+        <span style="font-size: 12px; cursor: pointer;">导出</span>
+      </div>
+      <template #dropdown>
+        <el-dropdown-menu>
+          <el-dropdown-item command="json">导出为 JSON</el-dropdown-item>
+        </el-dropdown-menu>
+      </template>
+    </el-dropdown>
+    <el-dropdown @command="handleImportCommand">
+      <div class="toolbar-item">
+        <span style="font-size: 12px; cursor: pointer;">导入</span>
+      </div>
+      <template #dropdown>
+        <el-dropdown-menu>
+          <el-dropdown-item command="json">导入 JSON</el-dropdown-item>
+        </el-dropdown-menu>
+      </template>
+    </el-dropdown>
+    <el-dropdown @command="handleDeleteCommand">
+      <div class="toolbar-item">
+        <span style="font-size: 12px; cursor: pointer;">删除</span>
+      </div>
+      <template #dropdown>
+        <el-dropdown-menu>
+          <el-dropdown-item command="delete">删除选中元素</el-dropdown-item>
+        </el-dropdown-menu>
+      </template>
+    </el-dropdown>
+    <input
+      ref="fileInput"
+      type="file"
+      accept=".json"
+      style="display: none"
+      @change="handleImport"
+    />
     <!-- <div>
       <button @click="saveGraph">保存</button>
     </div> -->
@@ -90,13 +127,14 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['changeNodeFillColor', 'saveGraph'])
+const emit = defineEmits(['changeNodeFillColor', 'saveGraph', 'importGraph'])
 
 const selectionOpened = ref(false)
 const undoAble = ref(false)
 const redoAble = ref(false)
 const colors = ref('#345678')
 const linetype = ref('pro-polyline')
+const fileInput = ref(null)
 const lineOptions = ref([
   {
     value: 'pro-polyline',
@@ -172,6 +210,88 @@ const changeLineType = (value) => {
     props.activeEdges.forEach(edge => {
       graphModel.changeEdgeType(edge.id, value)
     })
+  }
+}
+
+// 导出为 JSON
+const exportJSON = () => {
+  const data = props.lf.getGraphData()
+  const jsonString = JSON.stringify(data, null, 2)
+  const blob = new Blob([jsonString], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = '流程图.json'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
+// 处理导出命令
+const handleExport = (command) => {
+  if (command === 'json') {
+    exportJSON()
+  }
+}
+
+// 触发文件选择
+const triggerImport = () => {
+  fileInput.value.click()
+}
+
+// 处理导入命令（从下拉菜单）
+const handleImportCommand = (command) => {
+  if (command === 'json') {
+    triggerImport()
+  }
+}
+
+// 处理导入
+const handleImport = (event) => {
+  const file = event.target.files[0]
+  if (!file) return
+
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result)
+      // 发送导入事件给父组件
+      emit('importGraph', data)
+      // 重置文件输入
+      fileInput.value.value = ''
+    } catch (error) {
+      alert('JSON 文件格式错误，请检查文件内容')
+      console.error('导入失败:', error)
+    }
+  }
+  reader.readAsText(file)
+}
+
+// 删除选中的元素
+const deleteSelected = () => {
+  const { nodes, edges } = props.lf.getSelectElements()
+
+  if (nodes.length === 0 && edges.length === 0) {
+    alert('请先选择要删除的元素')
+    return
+  }
+
+  // 删除节点
+  nodes.forEach(node => {
+    props.lf.deleteNode(node.id)
+  })
+
+  // 删除边
+  edges.forEach(edge => {
+    props.lf.deleteEdge(edge.id)
+  })
+}
+
+// 处理删除命令（从下拉菜单）
+const handleDeleteCommand = (command) => {
+  if (command === 'delete') {
+    deleteSelected()
   }
 }
 </script>

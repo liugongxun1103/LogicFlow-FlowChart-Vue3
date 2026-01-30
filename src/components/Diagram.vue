@@ -7,6 +7,7 @@
       :activeEdges="activeEdges"
       @changeNodeFillColor="changeNodeFill"
       @saveGraph="saveGraph"
+      @importGraph="importGraph"
     />
     <div class="diagram-main">
       <diagram-sidebar class="diagram-sidebar" @dragInNode="dragInNode" />
@@ -49,6 +50,10 @@ const activeEdges = ref([])
 const properties = ref({})
 const diagram = ref(null)
 const container = ref(null)
+const background = ref(null)
+
+// 保存 updatePatternTransform 函数的引用
+let updatePatternTransformFn = null
 
 const initLogicFlow = (data) => {
   // 引入框选插件
@@ -63,11 +68,10 @@ const initLogicFlow = (data) => {
     },
     grid: {
       visible: false,
-      size: 5
+      size: 20
     },
     background: {
-      backgroundImage: 'url("data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAwIDEwIEwgNDAgMTAgTSAxMCAwIEwgMTAgNDAgTSAwIDIwIEwgNDAgMjAgTSAyMCAwIEwgMjAgNDAgTSAwIDMwIEwgNDAgMzAgTSAzMCAwIEwgMzAgNDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2QwZDBkMCIgb3BhY2l0eT0iMC4yIiBzdHJva2Utd2lkdGg9IjEiLz48cGF0aCBkPSJNIDQwIDAgTCAwIDAgMCA0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZDBkMGQwIiBzdHJva2Utd2lkdGg9IjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=")',
-      backgroundRepeat: 'repeat'
+      backgroundColor: 'transparent'
     }
   })
   lfInstance.setTheme(
@@ -97,6 +101,86 @@ const initLogicFlow = (data) => {
   }
 
   lf.value.on('selection:selected,node:click,blank:click,edge:click', handleSelection)
+
+  // 在 SVG 中添加背景网格图案
+  setTimeout(() => {
+    const svgElement = diagram.value.querySelector('svg')
+    if (svgElement) {
+      // 创建 defs 元素
+      let defs = svgElement.querySelector('defs')
+      if (!defs) {
+        defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs')
+        svgElement.insertBefore(defs, svgElement.firstChild)
+      }
+
+      // 创建网格图案
+      const pattern = document.createElementNS('http://www.w3.org/2000/svg', 'pattern')
+      pattern.setAttribute('id', 'grid-pattern')
+      pattern.setAttribute('width', '20')
+      pattern.setAttribute('height', '20')
+      pattern.setAttribute('patternUnits', 'userSpaceOnUse')
+
+      // 创建垂直线
+      const verticalLine = document.createElementNS('http://www.w3.org/2000/svg', 'line')
+      verticalLine.setAttribute('x1', '0')
+      verticalLine.setAttribute('y1', '0')
+      verticalLine.setAttribute('x2', '0')
+      verticalLine.setAttribute('y2', '20')
+      verticalLine.setAttribute('stroke', '#d0d0d0')
+      verticalLine.setAttribute('stroke-width', '1')
+
+      // 创建水平线
+      const horizontalLine = document.createElementNS('http://www.w3.org/2000/svg', 'line')
+      horizontalLine.setAttribute('x1', '0')
+      horizontalLine.setAttribute('y1', '0')
+      horizontalLine.setAttribute('x2', '20')
+      horizontalLine.setAttribute('y2', '0')
+      horizontalLine.setAttribute('stroke', '#d0d0d0')
+      horizontalLine.setAttribute('stroke-width', '1')
+
+      pattern.appendChild(verticalLine)
+      pattern.appendChild(horizontalLine)
+      defs.appendChild(pattern)
+
+      const lfBase = svgElement.querySelector('.lf-base')
+
+      if (lfBase) {
+        // 创建背景矩形
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
+        rect.setAttribute('x', '-5000')
+        rect.setAttribute('y', '-5000')
+        rect.setAttribute('width', '10000')
+        rect.setAttribute('height', '10000')
+        rect.setAttribute('fill', 'url(#grid-pattern)')
+        rect.setAttribute('style', 'pointer-events: none;')
+        rect.setAttribute('class', 'grid-background')
+
+        lfBase.insertBefore(rect, lfBase.firstChild)
+
+        // 监听画布移动，更新 pattern 的 transform
+        const updatePatternTransform = () => {
+          const outerG = svgElement.querySelector('g')
+          const transform = outerG?.getAttribute('transform')
+          if (transform) {
+            const match = transform.match(/matrix\(([^,]+),([^,]+),([^,]+),([^,]+),([^,]+),([^)]+)\)/)
+            if (match) {
+              const translateX = parseFloat(match[5])
+              const translateY = parseFloat(match[6])
+              pattern.setAttribute('patternTransform', `translate(${translateX}, ${translateY})`)
+            }
+          }
+        }
+
+        // 保存函数引用，供外部调用
+        updatePatternTransformFn = updatePatternTransform
+
+        // 监听事件
+        lfInstance.on('graph:transform', updatePatternTransform)
+        lfInstance.on('blank:mousemove', updatePatternTransform)
+        lfInstance.on('blank:mouseup', updatePatternTransform)
+      }
+    }
+  }, 200)
 }
 
 // 获取可以进行设置的属性
@@ -152,6 +236,27 @@ const saveGraph = () => {
   download(filename.value, JSON.stringify(data))
 }
 
+const importGraph = (data) => {
+  if (!data || !lf.value) {
+    alert('导入数据无效')
+    return
+  }
+  try {
+    // 清空当前图表
+    lf.value.clearData()
+    // 加载新数据
+    lf.value.render(data)
+    // 清空选择
+    activeNodes.value = []
+    activeEdges.value = []
+    properties.value = {}
+    alert('导入成功')
+  } catch (error) {
+    alert('导入失败，请检查数据格式')
+    console.error('导入错误:', error)
+  }
+}
+
 const download = (fname, text) => {
   window.sessionStorage.setItem(fname, text)
   const element = document.createElement('a')
@@ -180,6 +285,13 @@ if (window.location.search) {
 
 onMounted(() => {
   initLogicFlow(data)
+
+  // 初始化时进行一次微小的放大，避免缩放比例为 1.0 时网格跟随功能失效
+  setTimeout(() => {
+    if (lf.value) {
+      lf.value.zoom(true)
+    }
+  }, 300)
 })
 </script>
 
@@ -227,10 +339,6 @@ onMounted(() => {
 .diagram-container {
   flex: 1;
 }
-/* 由于背景图和gird不对齐，需要css处理一下 */
-.diagram /deep/ .lf-background {
-  left: -9px;
-}
 .diagram-wrapper {
   box-sizing: border-box;
   width: 100%;
@@ -240,6 +348,24 @@ onMounted(() => {
   box-shadow: 0px 0px 4px #838284;
   width: 100%;
   height: 100%;
+  cursor: grab;
+  user-select: none;
+}
+.lf-diagram:active {
+  cursor: grabbing;
+}
+/* LogicFlow 背景层设置为透明 */
+.diagram :deep(.lf-background) {
+  background: transparent !important;
+}
+.diagram :deep(.lf-canvas-overlay) {
+  background: transparent !important;
+}
+.diagram :deep(.lf-canvas) {
+  background: transparent !important;
+}
+.diagram :deep(svg) {
+  background: transparent !important;
 }
 ::-webkit-scrollbar {
   width: 9px;
